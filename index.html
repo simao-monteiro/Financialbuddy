@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>As Minhas Despesas</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-title">
+      <span class="app-logo" aria-hidden="true"></span>
+      <h1>As Minhas Despesas</h1>
+    </div>
+    <div class="header-controls">
+      <div class="currency-toggle" role="group" aria-label="Moeda de visualização">
+        <button class="currency-btn" data-currency="EUR">EUR (€)</button>
+        <button class="currency-btn" data-currency="CZK">CZK (Kč)</button>
+      </div>
+      <div class="rate-box">
+        <span id="rate-info" class="rate-info"></span>
+        <button id="btn-refresh-rate" class="btn-icon" title="Atualizar taxa de câmbio" aria-label="Atualizar taxa de câmbio">⟳</button>
+      </div>
+      <div class="backup-box">
+        <button id="btn-export-backup" class="btn-icon" title="Exportar backup (ficheiro .json)" aria-label="Exportar backup">⬇</button>
+        <button id="btn-import-backup" class="btn-icon" title="Importar backup (ficheiro .json)" aria-label="Importar backup">⬆</button>
+        <input type="file" id="input-import-backup" accept="application/json" hidden />
+      </div>
+    </div>
+  </header>
+
+  <nav class="view-tabs" role="tablist" aria-label="Navegação principal">
+    <button class="view-tab active" data-view="despesas" role="tab" aria-selected="true">Despesas</button>
+    <button class="view-tab" data-view="resumo" role="tab" aria-selected="false">Resumo mensal</button>
+  </nav>
+
+  <div id="view-despesas" class="view">
+    <nav class="week-nav">
+      <button id="btn-prev-week" class="btn-nav" aria-label="Semana anterior">◀</button>
+      <span id="week-range-label" class="week-range-label"></span>
+      <button id="btn-next-week" class="btn-nav" aria-label="Semana seguinte">▶</button>
+      <button id="btn-today" class="btn-today">Hoje</button>
+    </nav>
+
+    <section class="limit-settings" aria-label="Limite de gastos em dias de semana">
+      <label for="input-weekday-limit-amount">Limite dias de semana:</label>
+      <input type="number" id="input-weekday-limit-amount" min="0" step="0.5" />
+      <span class="limit-settings-unit">€</span>
+      <select id="select-weekday-limit-period" aria-label="Período do limite de dias de semana">
+        <option value="day">por dia</option>
+        <option value="week">por semana</option>
+        <option value="month">por mês</option>
+      </select>
+      <span class="limit-settings-note">Fim de semana mantém-se sempre 50 €/dia</span>
+    </section>
+
+    <main>
+      <section class="week-sheet" aria-label="Despesas da semana">
+        <div class="table-scroll">
+          <table class="week-table">
+            <thead>
+              <tr>
+                <th class="col-day"></th>
+                <th class="col-desc">Descrição</th>
+                <th class="col-amount">Valor</th>
+                <th class="col-currency">Moeda</th>
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody id="week-table-body">
+              <!-- rendered by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="weekday-limit-panel" class="limit-panel" aria-label="Progresso do limite de dias de semana" hidden></section>
+
+      <section class="chart-section" aria-label="Gráfico de gastos diários">
+        <h2>Gastos diários</h2>
+        <div id="chart-container" class="chart-container"></div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-dot legend-dot-under"></span>Dentro do limite diário</span>
+          <span class="legend-item"><span class="legend-dot legend-dot-over"></span>Acima do limite diário</span>
+          <span class="legend-item"><span class="legend-dot legend-dot-neutral"></span>Sem limite diário (limite por semana/mês)</span>
+          <span class="legend-item"><span class="legend-dash"></span>Limite diário aplicável</span>
+        </div>
+      </section>
+
+      <section class="month-section" aria-label="Total gasto no mês">
+        <h2>Total gasto no mês</h2>
+        <div id="month-summary" class="month-summary"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="view-resumo" class="view" hidden>
+    <section class="income-settings" aria-label="Ordenado mensal">
+      <label for="input-monthly-income">Ordenado mensal:</label>
+      <input type="number" id="input-monthly-income" min="0" step="10" />
+      <span class="limit-settings-unit">€</span>
+    </section>
+
+    <nav class="week-nav">
+      <button id="btn-prev-month" class="btn-nav" aria-label="Mês anterior">◀</button>
+      <span id="month-range-label" class="week-range-label"></span>
+      <button id="btn-next-month" class="btn-nav" aria-label="Mês seguinte">▶</button>
+      <button id="btn-current-month" class="btn-today">Mês atual</button>
+    </nav>
+
+    <main>
+      <section class="stat-row" aria-label="Resumo do mês">
+        <div class="stat-tile">
+          <span class="stat-label"><span class="compare-dot compare-dot-income"></span>Ganhos</span>
+          <strong id="stat-income" class="stat-value"></strong>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label"><span class="compare-dot compare-dot-expenses"></span>Gastos</span>
+          <strong id="stat-expenses" class="stat-value"></strong>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">Saldo</span>
+          <strong id="stat-balance" class="stat-value"></strong>
+        </div>
+      </section>
+
+      <section class="chart-section" aria-label="Progresso do orçamento mensal">
+        <h2>Orçamento mensal</h2>
+        <div id="budget-progress" class="budget-progress"></div>
+      </section>
+
+      <section class="chart-section" aria-label="Comparação entre ganhos e gastos">
+        <h2>Ganhos vs. gastos</h2>
+        <div id="compare-chart" class="compare-chart"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="js/dates.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/rates.js"></script>
+  <script src="js/chart.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
