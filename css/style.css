@@ -12,6 +12,10 @@
   --series-2: #eb6834;
   --status-good: #0ca30c;
   --status-critical: #d03b3b;
+  --cat-1: #eb6834;
+  --cat-2: #2a78d6;
+  --cat-3: #8b5cf6;
+  --cat-4: #d6336c;
   --shadow-card: 0 1px 2px rgba(11, 11, 11, 0.04), 0 4px 14px rgba(11, 11, 11, 0.05);
 }
 
@@ -30,6 +34,10 @@
     --series-2: #d95926;
     --status-good: #0ca30c;
     --status-critical: #e66767;
+    --cat-1: #d95926;
+    --cat-2: #3987e5;
+    --cat-3: #a78bfa;
+    --cat-4: #e64980;
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.35);
   }
 }
@@ -227,9 +235,8 @@ h2 {
   box-shadow: var(--shadow-card);
 }
 
-/* Limit settings */
+/* Income settings */
 
-.limit-settings,
 .income-settings {
   max-width: 1000px;
   margin: 0 auto;
@@ -241,12 +248,10 @@ h2 {
   font-size: 0.85rem;
 }
 
-.limit-settings label,
 .income-settings label {
   color: var(--text-secondary);
 }
 
-#input-weekday-limit-amount,
 #input-monthly-income {
   width: 90px;
   border: 1px solid var(--border);
@@ -260,9 +265,7 @@ h2 {
   transition: border-color 0.15s ease;
 }
 
-#input-weekday-limit-amount:hover,
 #input-monthly-income:hover,
-#input-weekday-limit-amount:focus,
 #input-monthly-income:focus {
   border-color: var(--series-1);
   outline: none;
@@ -272,32 +275,13 @@ h2 {
   color: var(--text-muted);
 }
 
-#select-weekday-limit-period {
-  border: 1px solid var(--border);
-  background: var(--surface-1);
-  color: var(--text-primary);
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 0.85rem;
-  font-family: inherit;
-}
+/* Budget progress meters (reused for the monthly category budgets) */
 
-.limit-settings-note {
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  margin-left: 4px;
-}
-
-/* Weekday limit progress panel (week/month period) */
-
-.limit-panel {
+.budget-progress {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-.limit-panel[hidden] {
-  display: none;
+  padding-top: 4px;
 }
 
 .limit-meter {
@@ -377,6 +361,9 @@ h2 {
 .col-day {
   width: 40px;
 }
+.col-category {
+  width: 160px;
+}
 .col-amount {
   width: 130px;
 }
@@ -415,26 +402,10 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 
-.day-badge {
-  font-size: 0.75rem;
-  padding: 3px 8px;
-  border-radius: 999px;
-  color: var(--text-secondary);
-  background: var(--gridline);
-}
-
 .day-total {
   margin-left: auto;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-
-.total-over {
-  color: var(--status-critical);
-}
-
-.total-under {
-  color: var(--text-primary);
 }
 
 .btn-add-expense {
@@ -555,6 +526,22 @@ h2 {
   fill: var(--series-1);
 }
 
+.cat-bar-1 {
+  fill: var(--cat-1);
+}
+
+.cat-bar-2 {
+  fill: var(--cat-2);
+}
+
+.cat-bar-3 {
+  fill: var(--cat-3);
+}
+
+.cat-bar-4 {
+  fill: var(--cat-4);
+}
+
 .chart-value-label {
   fill: var(--text-secondary);
   font-size: 10px;
@@ -599,10 +586,6 @@ h2 {
   color: var(--status-good);
 }
 
-.tooltip-neutral {
-  color: var(--text-secondary);
-}
-
 .chart-legend {
   display: flex;
   flex-wrap: wrap;
@@ -625,23 +608,20 @@ h2 {
   display: inline-block;
 }
 
-.legend-dot-under {
-  background: var(--status-good);
+.legend-dot.cat-1 {
+  background: var(--cat-1);
 }
 
-.legend-dot-over {
-  background: var(--status-critical);
+.legend-dot.cat-2 {
+  background: var(--cat-2);
 }
 
-.legend-dot-neutral {
-  background: var(--series-1);
+.legend-dot.cat-3 {
+  background: var(--cat-3);
 }
 
-.legend-dash {
-  width: 16px;
-  height: 0;
-  border-top: 2px dashed var(--text-muted);
-  display: inline-block;
+.legend-dot.cat-4 {
+  background: var(--cat-4);
 }
 
 /* Month summary */
@@ -724,8 +704,7 @@ h2 {
   background: var(--series-2);
 }
 
-.compare-chart,
-.budget-progress {
+.compare-chart {
   padding-top: 4px;
 }
 
@@ -774,6 +753,51 @@ h2 {
 
 .compare-fill-expenses {
   background: var(--series-2);
+}
+
+/* Category pie chart */
+
+.pie-container {
+  position: relative;
+}
+
+.pie-wrap {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.pie-svg {
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+}
+
+.pie-slice {
+  stroke: var(--surface-1);
+  stroke-width: 2;
+}
+
+.pie-slice.cat-1 {
+  fill: var(--cat-1);
+}
+
+.pie-slice.cat-2 {
+  fill: var(--cat-2);
+}
+
+.pie-slice.cat-3 {
+  fill: var(--cat-3);
+}
+
+.pie-slice.cat-4 {
+  fill: var(--cat-4);
+}
+
+.pie-legend {
+  flex-direction: column;
+  gap: 8px;
 }
 
 @media (max-width: 640px) {

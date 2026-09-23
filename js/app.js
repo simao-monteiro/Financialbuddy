@@ -3,13 +3,12 @@
 (function () {
   const store = window.ContasStore;
   const { getRate } = window.ContasRates;
-  const { renderWeekChart } = window.ContasChart;
+  const { renderWeekChart, renderPieChart } = window.ContasChart;
   const {
     toISODate,
     parseISODate,
     addDays,
     getMonday,
-    isWeekend,
     formatDayName,
     formatShortDate,
     formatWeekRange,
@@ -18,7 +17,18 @@
     addMonths,
   } = window.ContasDates;
 
-const WEEKEND_THRESHOLD_EUR = 50; // fixed, per day, always — not user-configurable
+const CATEGORIES = [
+  { id: 'comida', label: 'Comida' },
+  { id: 'transportes', label: 'Transportes' },
+  { id: 'lazer', label: 'Museus/Diversões' },
+  { id: 'roupa', label: 'Roupa' },
+];
+
+// Fixed monthly budgets, in EUR — not user-configurable.
+const BUDGET_COMIDA_EUR = 300;
+const BUDGET_OUTRAS_EUR = 100;
+const BUDGET_TOTAL_EUR = 400;
+
 const now = new Date();
 
 const state = {
@@ -26,7 +36,7 @@ const state = {
   weekMonday: getMonday(now),
   resumoMonth: { year: now.getFullYear(), month: now.getMonth() },
   expenses: [],
-  settings: { displayCurrency: 'EUR', weekdayLimitAmount: 10, weekdayLimitPeriod: 'day', monthlyIncome: 0 },
+  settings: { displayCurrency: 'EUR', monthlyIncome: 0 },
   rate: { rate: 25, fetchedAt: null, stale: true },
 };
 
@@ -44,9 +54,6 @@ const el = {
   btnExportBackup: document.getElementById('btn-export-backup'),
   btnImportBackup: document.getElementById('btn-import-backup'),
   inputImportBackup: document.getElementById('input-import-backup'),
-  weekdayLimitAmountInput: document.getElementById('input-weekday-limit-amount'),
-  weekdayLimitPeriodSelect: document.getElementById('select-weekday-limit-period'),
-  weekdayLimitPanel: document.getElementById('weekday-limit-panel'),
   weekTableBody: document.getElementById('week-table-body'),
   chartContainer: document.getElementById('chart-container'),
   monthSummary: document.getElementById('month-summary'),
@@ -60,6 +67,8 @@ const el = {
   statBalance: document.getElementById('stat-balance'),
   budgetProgress: document.getElementById('budget-progress'),
   compareChart: document.getElementById('compare-chart'),
+  categoryChartContainer: document.getElementById('category-chart-container'),
+  categoryPieContainer: document.getElementById('category-pie-container'),
 };
 
 function convert(amount, fromCurrency, toCurrency) {
@@ -80,84 +89,9 @@ function formatAmount(value, { compact = false } = {}) {
   }).format(value);
 }
 
-function weekdayLimitAmountDisplay() {
-  return convert(state.settings.weekdayLimitAmount, 'EUR', state.settings.displayCurrency);
-}
-
-function weekendThresholdDisplay() {
-  return convert(WEEKEND_THRESHOLD_EUR, 'EUR', state.settings.displayCurrency);
-}
-
-// Per-day threshold in the display currency, or null when no per-day
-// threshold applies (a weekday while the configured limit period is
-// 'week' or 'month' — that limit is tracked as a period total instead).
-function dayThreshold(date) {
-  if (isWeekend(date)) return weekendThresholdDisplay();
-  if (state.settings.weekdayLimitPeriod === 'day') return weekdayLimitAmountDisplay();
-  return null;
-}
-
-function weekdayTotalForWeek(monday) {
-  return Array.from({ length: 7 }, (_, i) => addDays(monday, i))
-    .filter((d) => !isWeekend(d))
-    .reduce((sum, d) => sum + dayTotalDisplay(toISODate(d)), 0);
-}
-
-function weekdayTotalForMonth(year, month) {
-  return totalForMonth(year, month, { weekdaysOnly: true });
-}
-
-function totalForMonth(year, month, { weekdaysOnly = false } = {}) {
-  return state.expenses.reduce((sum, e) => {
-    const d = parseISODate(e.date);
-    if (d.getFullYear() === year && d.getMonth() === month && (!weekdaysOnly || !isWeekend(d))) {
-      return sum + convert(e.amount, e.currency, state.settings.displayCurrency);
-    }
-    return sum;
-  }, 0);
-}
-
-function monthlyIncomeDisplay() {
-  return convert(state.settings.monthlyIncome, 'EUR', state.settings.displayCurrency);
-}
-
-function countDaysInMonth(year, month, predicate) {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  let count = 0;
-  for (let day = 1; day <= daysInMonth; day++) {
-    if (predicate(new Date(year, month, day))) count++;
-  }
-  return count;
-}
-
-// Number of distinct Mon-Sun weeks that touch this month — used to scale a
-// weekly weekday limit into a monthly total.
-function weeksOverlappingMonth(year, month) {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const mondays = new Set();
-  for (let day = 1; day <= daysInMonth; day++) {
-    mondays.add(toISODate(getMonday(new Date(year, month, day))));
-  }
-  return mondays.size;
-}
-
-// Theoretical monthly ceiling if every day were spent right up to its
-// applicable limit: the weekday limit (scaled to the month, whatever period
-// it's configured in) plus the fixed weekend threshold for every weekend day.
-function monthlyBudgetDisplay(year, month) {
-  const weekendDays = countDaysInMonth(year, month, isWeekend);
-  const weekdayDays = countDaysInMonth(year, month, (d) => !isWeekend(d));
-  const weekendBudget = weekendThresholdDisplay() * weekendDays;
-  const weekdayLimit = weekdayLimitAmountDisplay();
-  let weekdayBudget;
-  if (state.settings.weekdayLimitPeriod === 'day') {
-    weekdayBudget = weekdayLimit * weekdayDays;
-  } else if (state.settings.weekdayLimitPeriod === 'week') {
-    weekdayBudget = weekdayLimit * weeksOverlappingMonth(year, month);
-  } else {
-    weekdayBudget = weekdayLimit;
-  }
-  return weekendBudget + weekdayBudget;
+// Converts a fixed EUR budget constant into the currently displayed currency.
+function budgetDisplay(amountEur) {
+  return convert(amountEur, 'EUR', state.settings.displayCurrency);
 }
 
 function weekDates() {
@@ -175,21 +109,41 @@ function dayTotalDisplay(iso) {
   );
 }
 
+function totalForMonth(year, month) {
+  return state.expenses.reduce((sum, e) => {
+    const d = parseISODate(e.date);
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      return sum + convert(e.amount, e.currency, state.settings.displayCurrency);
+    }
+    return sum;
+  }, 0);
+}
+
+// Total spent in the given month, broken down per category id.
+function totalForMonthByCategory(year, month) {
+  const totals = {};
+  CATEGORIES.forEach((c) => (totals[c.id] = 0));
+  state.expenses.forEach((e) => {
+    const d = parseISODate(e.date);
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      totals[e.category] = (totals[e.category] || 0) + convert(e.amount, e.currency, state.settings.displayCurrency);
+    }
+  });
+  return totals;
+}
+
+function monthlyIncomeDisplay() {
+  return convert(state.settings.monthlyIncome, 'EUR', state.settings.displayCurrency);
+}
+
 function render() {
   renderWeekNav();
   renderCurrencyToggle();
   renderRateInfo();
-  renderLimitControls();
   renderWeekTable();
   renderChart();
-  renderWeekdayLimitPanel();
   renderMonthSummary();
   renderResumo();
-}
-
-function renderLimitControls() {
-  el.weekdayLimitAmountInput.value = state.settings.weekdayLimitAmount;
-  el.weekdayLimitPeriodSelect.value = state.settings.weekdayLimitPeriod;
 }
 
 function renderWeekNav() {
@@ -213,6 +167,10 @@ function renderRateInfo() {
   el.rateInfo.textContent = `1 EUR = ${state.rate.rate.toFixed(3)} CZK (${dateLabel}${staleLabel})`;
 }
 
+function categoryOptions(selectedId) {
+  return CATEGORIES.map((c) => `<option value="${c.id}" ${selectedId === c.id ? 'selected' : ''}>${c.label}</option>`).join('');
+}
+
 function renderWeekTable() {
   const dates = weekDates();
   const html = dates
@@ -220,12 +178,6 @@ function renderWeekTable() {
       const iso = toISODate(date);
       const expenses = expensesForDate(iso);
       const total = dayTotalDisplay(iso);
-      const threshold = dayThreshold(date);
-      const over = threshold != null && total > threshold;
-      const weekend = isWeekend(date);
-      const badge = threshold != null
-        ? `<span class="day-badge ${weekend ? 'badge-weekend' : 'badge-weekday'}">limite ${formatAmount(threshold)}</span>`
-        : '';
 
       const rows = expenses.length
         ? expenses
@@ -235,6 +187,11 @@ function renderWeekTable() {
             <td></td>
             <td>
               <input type="text" class="input-desc" data-field="description" data-id="${exp.id}" value="${escapeHtml(exp.description)}" placeholder="Descrição" />
+            </td>
+            <td>
+              <select class="input-category" data-field="category" data-id="${exp.id}">
+                ${categoryOptions(exp.category)}
+              </select>
             </td>
             <td>
               <input type="number" class="input-amount" data-field="amount" data-id="${exp.id}" value="${exp.amount}" min="0" step="0.01" />
@@ -249,17 +206,16 @@ function renderWeekTable() {
           </tr>`
             )
             .join('')
-        : `<tr class="empty-row"><td></td><td colspan="4" class="empty-day-msg">Sem despesas registadas</td></tr>`;
+        : `<tr class="empty-row"><td></td><td colspan="5" class="empty-day-msg">Sem despesas registadas</td></tr>`;
 
       return `
       <tbody class="day-group" data-date="${iso}">
         <tr class="day-header-row">
-          <td colspan="5">
+          <td colspan="6">
             <div class="day-header">
               <span class="day-name">${formatDayName(date)}</span>
               <span class="day-date">${formatShortDate(date)}</span>
-              ${badge}
-              <span class="day-total ${over ? 'total-over' : 'total-under'}">Total: ${formatAmount(total)}</span>
+              <span class="day-total">Total: ${formatAmount(total)}</span>
               <button class="btn-add-expense" data-date="${iso}">+ Adicionar despesa</button>
             </div>
           </td>
@@ -322,45 +278,9 @@ function renderChart() {
     label: date.toLocaleDateString('pt-PT', { weekday: 'short' }).replace('.', ''),
     dateLabel: formatShortDate(date),
     value: dayTotalDisplay(toISODate(date)),
-    threshold: dayThreshold(date),
+    threshold: null,
   }));
-  renderWeekChart(el.chartContainer, days, formatAmount);
-}
-
-function renderWeekdayLimitPanel() {
-  const period = state.settings.weekdayLimitPeriod;
-  if (period === 'day') {
-    el.weekdayLimitPanel.hidden = true;
-    el.weekdayLimitPanel.innerHTML = '';
-    return;
-  }
-
-  const limit = weekdayLimitAmountDisplay();
-  const items =
-    period === 'week'
-      ? [{ label: 'Dias de semana (seg–sex) desta semana', spent: weekdayTotalForWeek(state.weekMonday) }]
-      : getMonthsInWeek(state.weekMonday).map(({ year, month }) => ({
-          label: `Dias de semana em ${formatMonthLabel(year, month)}`,
-          spent: weekdayTotalForMonth(year, month),
-        }));
-
-  el.weekdayLimitPanel.hidden = false;
-  el.weekdayLimitPanel.innerHTML = items
-    .map(({ label, spent }) => {
-      const over = spent > limit;
-      const pct = limit > 0 ? Math.min(100, (spent / limit) * 100) : 100;
-      return `
-        <div class="limit-meter">
-          <div class="limit-meter-head">
-            <span>${label}</span>
-            <strong class="${over ? 'total-over' : 'total-under'}">${formatAmount(spent)} / ${formatAmount(limit)}</strong>
-          </div>
-          <div class="limit-meter-track">
-            <div class="limit-meter-fill ${over ? 'limit-meter-fill-over' : ''}" style="width:${pct}%"></div>
-          </div>
-        </div>`;
-    })
-    .join('');
+  renderWeekChart(el.chartContainer, days, formatAmount, 'Gastos diários da semana');
 }
 
 function renderMonthSummary() {
@@ -372,6 +292,21 @@ function renderMonthSummary() {
     })
     .join('');
   el.monthSummary.innerHTML = html;
+}
+
+function renderBudgetMeter(label, spent, budget) {
+  const over = spent > budget;
+  const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 100;
+  return `
+    <div class="limit-meter">
+      <div class="limit-meter-head">
+        <span>${label}</span>
+        <strong class="${over ? 'balance-negative' : ''}">${formatAmount(spent)} / ${formatAmount(budget)}</strong>
+      </div>
+      <div class="limit-meter-track">
+        <div class="limit-meter-fill ${over ? 'limit-meter-fill-over' : ''}" style="width:${pct}%"></div>
+      </div>
+    </div>`;
 }
 
 function renderResumo() {
@@ -388,23 +323,15 @@ function renderResumo() {
   el.statBalance.textContent = `${positive ? '▲' : '▼'} ${formatAmount(Math.abs(balance))}`;
   el.statBalance.className = `stat-value ${positive ? 'balance-positive' : 'balance-negative'}`;
 
-  const budget = monthlyBudgetDisplay(state.resumoMonth.year, state.resumoMonth.month);
-  const budgetOver = spent > budget;
-  const budgetPct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
-  const budgetDiff = budget - spent;
-  const savingsLine = budgetOver
-    ? `Excedeste o orçamento em ${formatAmount(-budgetDiff)}`
-    : `Poupaste ${formatAmount(budgetDiff)} por não atingir o teto`;
-  el.budgetProgress.innerHTML = `
-    <div class="limit-meter-head">
-      <span>Orçamento mensal (dias de semana + fim de semana)</span>
-      <strong class="${budgetOver ? 'total-over' : 'total-under'}">${formatAmount(spent)} / ${formatAmount(budget)} (${Math.round(budgetPct)}%)</strong>
-    </div>
-    <div class="limit-meter-track">
-      <div class="limit-meter-fill ${budgetOver ? 'limit-meter-fill-over' : ''}" style="width:${budgetPct}%"></div>
-    </div>
-    <div class="budget-savings-line ${budgetOver ? 'balance-negative' : 'balance-positive'}">${savingsLine}</div>
-  `;
+  const categoryTotals = totalForMonthByCategory(state.resumoMonth.year, state.resumoMonth.month);
+  const comidaSpent = categoryTotals.comida;
+  const outrasSpent = categoryTotals.transportes + categoryTotals.lazer + categoryTotals.roupa;
+
+  el.budgetProgress.innerHTML = [
+    renderBudgetMeter('Comida', comidaSpent, budgetDisplay(BUDGET_COMIDA_EUR)),
+    renderBudgetMeter('Outras despesas (Transportes, Museus/Diversões, Roupa)', outrasSpent, budgetDisplay(BUDGET_OUTRAS_EUR)),
+    renderBudgetMeter('Total geral', spent, budgetDisplay(BUDGET_TOTAL_EUR)),
+  ].join('');
 
   const max = Math.max(income, spent, 1);
   const incomePct = Math.min(100, (income / max) * 100);
@@ -422,6 +349,22 @@ function renderResumo() {
     </div>
     <div class="compare-bar-track"><div class="compare-bar-fill compare-fill-expenses" style="width:${spentPct}%"></div></div>
   `;
+
+  const categoryBars = CATEGORIES.map((c, i) => ({
+    label: c.label,
+    dateLabel: '',
+    value: categoryTotals[c.id],
+    threshold: null,
+    colorClass: `cat-bar-${i + 1}`,
+  }));
+  renderWeekChart(el.categoryChartContainer, categoryBars, formatAmount, 'Total gasto por categoria este mês');
+
+  const pieItems = CATEGORIES.map((c, i) => ({
+    label: c.label,
+    value: categoryTotals[c.id],
+    colorClass: `cat-${i + 1}`,
+  }));
+  renderPieChart(el.categoryPieContainer, pieItems, formatAmount);
 }
 
 function wireGlobalEvents() {
@@ -457,8 +400,10 @@ function wireGlobalEvents() {
     const a = document.createElement('a');
     a.href = url;
     a.download = `despesas-backup-${stamp}.json`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   el.btnImportBackup.addEventListener('click', () => {
     el.inputImportBackup.click();
@@ -478,15 +423,6 @@ function wireGlobalEvents() {
     } catch (err) {
       alert(`Não foi possível importar o ficheiro: ${err.message}`);
     }
-  });
-  el.weekdayLimitAmountInput.addEventListener('change', async () => {
-    const amount = Math.max(0, parseFloat(el.weekdayLimitAmountInput.value) || 0);
-    state.settings = await store.updateSettings({ weekdayLimitAmount: amount });
-    render();
-  });
-  el.weekdayLimitPeriodSelect.addEventListener('change', async () => {
-    state.settings = await store.updateSettings({ weekdayLimitPeriod: el.weekdayLimitPeriodSelect.value });
-    render();
   });
   el.viewTabs.forEach((tab) => {
     tab.addEventListener('click', () => {

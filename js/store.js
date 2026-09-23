@@ -8,17 +8,14 @@
   const EXPENSES_KEY = 'contas_expenses_v1';
   const SETTINGS_KEY = 'contas_settings_v1';
 
-  // weekdayLimitPeriod: 'day' | 'week' | 'month' — the period over which
-  // weekdayLimitAmount (always in EUR) applies to weekday spending. Weekend
-  // spending has its own fixed, non-configurable per-day threshold.
   // monthlyIncome (always in EUR) is the salary used on the "Resumo mensal"
   // page to compare against that month's spending.
   const DEFAULT_SETTINGS = {
     displayCurrency: 'EUR',
-    weekdayLimitAmount: 10,
-    weekdayLimitPeriod: 'day',
     monthlyIncome: 0,
   };
+
+  const DEFAULT_CATEGORY = 'comida';
 
   function genId() {
     if (global.crypto?.randomUUID) return global.crypto.randomUUID();
@@ -39,12 +36,19 @@
   }
 
   async function getExpenses() {
-    return readJSON(EXPENSES_KEY, []);
+    return readJSON(EXPENSES_KEY, []).map((e) => ({ category: DEFAULT_CATEGORY, ...e }));
   }
 
-  async function addExpense({ date, description, amount, currency }) {
+  async function addExpense({ date, description, amount, currency, category }) {
     const expenses = readJSON(EXPENSES_KEY, []);
-    const expense = { id: genId(), date, description: description || '', amount, currency };
+    const expense = {
+      id: genId(),
+      date,
+      description: description || '',
+      amount,
+      currency,
+      category: category || DEFAULT_CATEGORY,
+    };
     expenses.push(expense);
     writeJSON(EXPENSES_KEY, expenses);
     return expense;
